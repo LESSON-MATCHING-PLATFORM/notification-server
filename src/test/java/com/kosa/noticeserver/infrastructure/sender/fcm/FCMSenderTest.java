@@ -45,7 +45,6 @@ class FCMSenderTest {
                 title,
                 body,
                 Collections.emptyMap(),
-                null,
                 null
         );
     }
