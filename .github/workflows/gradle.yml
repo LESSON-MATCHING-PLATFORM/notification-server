@@ -22,15 +22,15 @@ jobs:
       uses: actions/checkout@v4
 
     # 2. JDK 설정 및 자바 스프링 빌드
-    - name: Set up JDK 17
+    - name: Set up JDK 21
       uses: actions/actions-setup-java@v4
       with:
-        java-version: '17'
+        java-version: '21'
         distribution: 'temurin'
-        cache: maven # 또는 gradle
+        cache: gradle
 
     - name: Build Spring Boot Application
-      run: ./mvnw clean package -DskipTests # 또는 ./gradlew build
+      run: ./gradlew build
     
     # 3. GCP 인증 (Workload Identity)
     - name: Authenticate to Google Cloud
