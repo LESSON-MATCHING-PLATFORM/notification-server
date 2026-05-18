@@ -6,7 +6,6 @@ spring:
     name: notice-server
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # ? DB ?? ??, ??, ????? ????? ??
     url: jdbc:mysql://${DB_HOST:localhost}:3306/fillinv?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
@@ -22,7 +21,6 @@ spring:
         format_sql: true
 
   kafka:
-    # ? ??? ??? ??? ????? ??
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
