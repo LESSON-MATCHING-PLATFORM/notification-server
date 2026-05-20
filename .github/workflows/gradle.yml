@@ -30,7 +30,7 @@ jobs:
         cache: gradle
 
     - name: Build Spring Boot Application
-      run: ./gradlew build -x
+      run: ./gradlew build -x test
     
     # 3. GCP 인증 (Workload Identity)
     - name: Authenticate to Google Cloud
