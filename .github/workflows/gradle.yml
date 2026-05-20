@@ -7,7 +7,7 @@ on:
 env:
   GCP_PROJECT_ID: "lessonplatform-495307"
   GCP_REGION: "asia-northeast3"
-  ARTIFACT_REGISTRY_REPO: "notice-server-repo" # GCP에 만들 이미지 저장소 이름
+  ARTIFACT_REGISTRY_REPO: "notification-server-repo" # GCP에 만들 이미지 저장소 이름
   IMAGE_NAME: "spring-app"
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write      # GCP Workload Identity와 통신하기 위한 OIDC 토큰 발행 권한
 
     steps:
     - name: Code Checkout
@@ -30,7 +31,7 @@ jobs:
         cache: gradle
 
     - name: Build Spring Boot Application
-      run: ./gradlew build
+      run: ./gradlew build -x test
     
     # 3. GCP 인증 (Workload Identity)
     - name: Authenticate to Google Cloud
@@ -38,11 +39,15 @@ jobs:
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-    
-    # # 2. ECR 로그인
-    # - name: Login to Amazon ECR
-    #   id: login-ecr
-    #   uses: aws-actions/amazon-ecr-login@v1
+
+    # 4. 도커 이미지 빌드 및 GCP Artifact Registry로 Push
+    - name: Configure Docker for GCP
+      run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t asia-northeast3-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY_REPO/$IMAGE_NAME:latest .
+        docker push asia-northeast3-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY_REPO/$IMAGE_NAME:latest
 
     # # 3. Docker 이미지 빌드, 태그, 푸시
     # - name: Build, tag, and push image to Amazon ECR
