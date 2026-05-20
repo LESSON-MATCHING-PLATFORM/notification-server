@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write      # GCP Workload Identity와 통신하기 위한 OIDC 토큰 발행 권한
 
     steps:
     - name: Code Checkout
