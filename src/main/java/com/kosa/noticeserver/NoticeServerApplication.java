@@ -7,11 +7,5 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 
 @SpringBootApplication
 public class NoticeServerApplication {
-
-    public static void main(String[] args) {
-        new SpringApplicationBuilder(NoticeServerApplication.class)
-                .initializers(new EnvConfigInitializer())
-                .run(args);
-    }
-
+    public static void main(String[] args) { SpringApplication.run(NoticeServerApplication.class, args); }
 }
