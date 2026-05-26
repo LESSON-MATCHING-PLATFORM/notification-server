@@ -20,7 +20,6 @@ repositories {
 
 dependencyManagement {
     imports {
-        // Spring Boot 4.x 전용 최신 LTS BOM 지정
         mavenBom "com.google.cloud:spring-cloud-gcp-dependencies:8.0.2"
     }
 }
@@ -43,6 +42,9 @@ dependencies {
 
     implementation 'com.google.firebase:firebase-admin:9.8.0'
     implementation 'com.google.cloud:spring-cloud-gcp-starter-secretmanager'
+
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-mysql'
 }
 
 tasks.named('test') {
