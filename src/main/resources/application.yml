@@ -1,5 +1,5 @@
 server:
-  port: 9090
+  port: 8080
 
 spring:
   application:
@@ -29,7 +29,7 @@ spring:
         format_sql: true
 
   kafka:
-    bootstrap-servers: ${sm://KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${sm://KAFKA_BOOTSTRAP_SERVERS}:9094
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
