@@ -38,3 +38,6 @@ out/
 
 ### environment ###
 .env
+
+### local 설정 ###
+*-local.yml
