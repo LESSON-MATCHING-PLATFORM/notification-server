@@ -40,6 +40,7 @@ public class FCMSender implements NotificationSender {
             results.add(new SendDetails(
                     sendResponse.isSuccessful(),
                     sendResponse.getMessageId(),
+                    sendResponse.getException().getMessage(),
                     !sendResponse.isSuccessful() ? sendResponse.getException().getErrorCode().toString() : null,
                     originalCommand
             ));

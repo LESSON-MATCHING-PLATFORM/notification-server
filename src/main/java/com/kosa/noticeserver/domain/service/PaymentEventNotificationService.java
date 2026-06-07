@@ -1,14 +1,12 @@
 package com.kosa.noticeserver.domain.service;
 
-import com.kosa.noticeserver.domain.model.NotificationType;
-import com.kosa.noticeserver.domain.model.SendBatchResult;
-import com.kosa.noticeserver.domain.model.TokenEntity;
+import com.kosa.noticeserver.domain.model.*;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
-import com.kosa.noticeserver.domain.model.SendNotificationCommand;
 import com.kosa.noticeserver.infrastructure.repository.TokenRepository;
 import com.kosa.noticeserver.infrastructure.sender.fcm.FCMSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jboss.logging.MDC;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -28,26 +26,30 @@ public class PaymentEventNotificationService {
 
         boolean isSendEnabled = notificationService.canSend(paymentEvent.getUserId(), NotificationType.PAYMENT);
 
-        if (!isSendEnabled) {
-            log.info("[Notice-Skip] Disabled user: {}, event: {}", paymentEvent.getUserId(), paymentEvent.getId());
-            return;
-        }
+        log.info("[{}}] user: {}, isSendEnabled : {}", MDC.get("eventId"), paymentEvent.getUserId(), isSendEnabled);
+
+        if (!isSendEnabled) return;
 
         List<String> tokens = tokenRepository.findAllTokensByUserId(paymentEvent.getUserId());
 
-        if (tokens.isEmpty()) {
-            log.info("[Notice-Skip] No tokens for user: {}, event: {}", paymentEvent.getUserId(), paymentEvent.getId());
-            return;
-        }
+        log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), paymentEvent.getUserId(), tokens.size());
+
+        if (tokens.isEmpty()) return;
 
         List<SendNotificationCommand> commands = tokens.stream().map(token -> buildNotification(token, paymentEvent)).toList();
 
         try {
-            fcmsender.send(commands);
-            log.info("[Notice-Success] Sent FCM for event: {}", paymentEvent.getId());
+            SendBatchResult send = fcmsender.send(commands);
+
+            for (SendDetails detail : send.results()) {
+                if (detail.isSuccess()) {
+                    log.info("[{}}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
+                } else {
+                    log.error("[{}}] user: {}, token : {}, FCM send failed, respoonse : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
+                }
+            }
         } catch (Throwable e) {
-            log.error("[Notice-Failed] FCM send error for event: {}", paymentEvent.getId(), e);
-            e.printStackTrace();
+            log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
         }
     }
 
@@ -60,11 +62,8 @@ public class PaymentEventNotificationService {
         userIds = paymentEvents.stream()
                 .filter(
                         event -> {
-                            if (!isSendEnabledMap.get(event.getUserId())) {
-                                log.info("[Notice-Skip] Disabled user: {}, event: {}", event.getUserId(), event.getId());
-                                return false;
-                            }
-                            return true;
+                            log.info("[{}}] user: {}, isSendEnabled : {}", MDC.get("eventId"), event.getUserId(), isSendEnabledMap.get(event.getUserId()));
+                            return isSendEnabledMap.get(event.getUserId());
                         }
                 )
                 .map(PaymentEvent::getUserId)
@@ -81,13 +80,8 @@ public class PaymentEventNotificationService {
 
         List<SendNotificationCommand> list = paymentEvents.stream()
                 .flatMap(event -> {
-                    if (!isSendEnabledMap.get(event.getUserId())) {
-                        log.info("[Notice-Skip] Disabled user: {}, event: {}", event.getUserId(), event.getId());
-                        return Stream.empty();
-                    }
-
                     if (tokens.isEmpty()) {
-                        log.info("[Notice-Skip] No tokens for user: {}, event: {}", event.getUserId(), event.getId());
+                        log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), tokens.size());
                         return Stream.empty();
                     }
 
@@ -98,15 +92,15 @@ public class PaymentEventNotificationService {
 
         try {
             SendBatchResult result = fcmsender.send(list);
-            result.results().stream().forEach(notification -> {
-                if (notification.isSuccess()) {
-                    log.info("[Notice-Success] Sent FCM for event: {}", notification.messageId());
+            for (SendDetails detail : result.results()) {
+                if (detail.isSuccess()) {
+                    log.info("[{}}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
                 } else {
-                    log.error("[Notice-Failed] FCM send error for event: {}", notification.messageId());
+                    log.error("[{}}] user: {}, token : {}, FCM send failed", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
                 }
-            });
+            }
         } catch (Throwable e) {
-            e.printStackTrace();
+            log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
         }
 
     }
@@ -119,6 +113,7 @@ public class PaymentEventNotificationService {
         Map<String, String> data = new HashMap<>();
         data.put("orderId", event.getOrderId());
         data.put("paymentTime", event.getTimestamp());
+        data.put("userId", event.getUserId());
 
         return new SendNotificationCommand(
                 token,

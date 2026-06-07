@@ -9,8 +9,6 @@ import lombok.ToString;
 @NoArgsConstructor // 역직렬화에 필수
 @ToString
 public class PaymentEvent {
-    @JsonProperty("id")
-    private String id;
     @JsonProperty("user_id")
     private String userId;
     @JsonProperty("user_name")
