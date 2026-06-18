@@ -52,29 +52,5 @@ jobs:
     # 5. CP VM의 컨테이너 이미지 업데이트 및 재시작 명령
     - name: Deploy to GCP Compute Engine
       run: |
-        gcloud compute instances reset spring-app-vm --zone=asia-northeast3-a
+        gcloud compute instances reset spring --zone=asia-northeast3-a
 
-    # # 4. EC2 Docker 이미지 pull 및 docker run
-    # - name: Deploy to EC2
-    #   uses: appleboy/ssh-action@v1.0.3
-    #   with:
-    #     host: ${{ secrets.EC2_HOST }}
-    #     username: ec2-user
-    #     key: ${{ secrets.EC2_KEY }}
-    #     script: |
-    #       aws ecr get-login-password --region ap-southeast-2 \
-    #       | docker login \
-    #         --username AWS \
-    #         --password-stdin ${{ steps.login-ecr.outputs.registry }}
-    
-    #       docker pull ${{ steps.login-ecr.outputs.registry }}/lesson-platform/server:${{ github.sha }}
-    
-    #       docker stop lesson-server || true
-    #       docker rm lesson-server || true
-    
-    #       docker run -d -p 8080:8080 \
-    #         --name lesson-server \
-    #         -e DB_SERVER= ${{ secrets.DB_HOST }} \
-    #         -e TOSS_SECRET_KEY= ${{ secrets.PSP_TOSS_SECRET_KEY }} \
-    #         ${{ steps.login-ecr.outputs.registry }}/lesson-platform/server:${{ github.sha }}
-    
