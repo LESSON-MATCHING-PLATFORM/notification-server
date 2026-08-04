@@ -45,11 +45,12 @@ public class PaymentEventNotificationService {
                 if (detail.isSuccess()) {
                     log.info("[{}}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
                 } else {
-                    log.error("[{}}] user: {}, token : {}, FCM send failed, respoonse : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
+                    log.error("[{}}] user: {}, token : {}, FCM send failed, response : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
                 }
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
+            throw new NotificationDeliveryException("FCM payment notification send failed", e);
         }
     }
 
@@ -63,7 +64,7 @@ public class PaymentEventNotificationService {
                 .filter(
                         event -> {
                             log.info("[{}}] user: {}, isSendEnabled : {}", MDC.get("eventId"), event.getUserId(), isSendEnabledMap.get(event.getUserId()));
-                            return isSendEnabledMap.get(event.getUserId());
+                            return Boolean.TRUE.equals(isSendEnabledMap.get(event.getUserId()));
                         }
                 )
                 .map(PaymentEvent::getUserId)
@@ -85,10 +86,14 @@ public class PaymentEventNotificationService {
                         return Stream.empty();
                     }
 
-                    return tokens.get(event.getUserId()).stream().map(token -> buildNotification(token, event));
+                    List<String> userTokens = tokens.getOrDefault(event.getUserId(), Collections.emptyList());
+                    log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), userTokens.size());
+                    return userTokens.stream().map(token -> buildNotification(token, event));
 
                 })
                 .toList();
+
+        if (list.isEmpty()) return;
 
         try {
             SendBatchResult result = fcmsender.send(list);
@@ -101,6 +106,7 @@ public class PaymentEventNotificationService {
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
+            throw new NotificationDeliveryException("FCM payment bulk notification send failed", e);
         }
 
     }
