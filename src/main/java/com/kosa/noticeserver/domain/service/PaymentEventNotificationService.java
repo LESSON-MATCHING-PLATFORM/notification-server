@@ -26,13 +26,13 @@ public class PaymentEventNotificationService {
 
         boolean isSendEnabled = notificationService.canSend(paymentEvent.getUserId(), NotificationType.PAYMENT);
 
-        log.info("[{}}] user: {}, isSendEnabled : {}", MDC.get("eventId"), paymentEvent.getUserId(), isSendEnabled);
+        log.info("[{}] user: {}, isSendEnabled : {}", MDC.get("eventId"), paymentEvent.getUserId(), isSendEnabled);
 
         if (!isSendEnabled) return;
 
         List<String> tokens = tokenRepository.findAllTokensByUserId(paymentEvent.getUserId());
 
-        log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), paymentEvent.getUserId(), tokens.size());
+        log.info("[{}] user: {}, tokenCount : {}", MDC.get("eventId"), paymentEvent.getUserId(), tokens.size());
 
         if (tokens.isEmpty()) return;
 
@@ -43,9 +43,9 @@ public class PaymentEventNotificationService {
 
             for (SendDetails detail : send.results()) {
                 if (detail.isSuccess()) {
-                    log.info("[{}}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
+                    log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
                 } else {
-                    log.error("[{}}] user: {}, token : {}, FCM send failed, response : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
+                    log.error("[{}] user: {}, token : {}, FCM send failed, response : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
                 }
             }
         } catch (Throwable e) {
@@ -63,7 +63,7 @@ public class PaymentEventNotificationService {
         userIds = paymentEvents.stream()
                 .filter(
                         event -> {
-                            log.info("[{}}] user: {}, isSendEnabled : {}", MDC.get("eventId"), event.getUserId(), isSendEnabledMap.get(event.getUserId()));
+                            log.info("[{}] user: {}, isSendEnabled : {}", MDC.get("eventId"), event.getUserId(), isSendEnabledMap.get(event.getUserId()));
                             return Boolean.TRUE.equals(isSendEnabledMap.get(event.getUserId()));
                         }
                 )
@@ -82,12 +82,12 @@ public class PaymentEventNotificationService {
         List<SendNotificationCommand> list = paymentEvents.stream()
                 .flatMap(event -> {
                     if (tokens.isEmpty()) {
-                        log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), tokens.size());
+                        log.info("[{}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), tokens.size());
                         return Stream.empty();
                     }
 
                     List<String> userTokens = tokens.getOrDefault(event.getUserId(), Collections.emptyList());
-                    log.info("[{}}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), userTokens.size());
+                    log.info("[{}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), userTokens.size());
                     return userTokens.stream().map(token -> buildNotification(token, event));
 
                 })
@@ -99,9 +99,9 @@ public class PaymentEventNotificationService {
             SendBatchResult result = fcmsender.send(list);
             for (SendDetails detail : result.results()) {
                 if (detail.isSuccess()) {
-                    log.info("[{}}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
+                    log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
                 } else {
-                    log.error("[{}}] user: {}, token : {}, FCM send failed", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
+                    log.error("[{}] user: {}, token : {}, FCM send failed", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
                 }
             }
         } catch (Throwable e) {
