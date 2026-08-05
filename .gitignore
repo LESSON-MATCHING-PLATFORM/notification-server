@@ -36,8 +36,24 @@ out/
 ### VS Code ###
 .vscode/
 
+### OS ###
+.DS_Store
+
+### Logs & temp ###
+logs/
+*.log
+*.tmp
+*.swp
+*.bak
+*.old
+
+### Docs ###
+docs/
+
 ### environment ###
 .env
+.env.*
 
 ### local 설정 ###
 *-local.yml
+*-local.properties

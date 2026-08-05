@@ -27,7 +27,7 @@ public class PaymentTopicConsumer {
     ) {
         log.info("Payment Event Received");
 
-        MDC.put("traceId", eventId);
+        MDC.put("eventId", eventId);
 
         try {
             PaymentEvent paymentEvent = objectMapper.readValue(payload, PaymentEvent.class);
@@ -49,7 +49,7 @@ public class PaymentTopicConsumer {
     ) {
         log.info("Payment Bulk Event Received");
 
-        MDC.put("traceId", eventId);
+        MDC.put("eventId", eventId);
 
         try {
             PaymentBulkEvent paymentBulkEvent = objectMapper.readValue(payload, PaymentBulkEvent.class);
