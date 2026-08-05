@@ -2,6 +2,7 @@ package com.kosa.noticeserver.domain.service;
 
 import com.kosa.noticeserver.domain.model.ChannelType;
 import com.kosa.noticeserver.domain.model.NotificationDelivery;
+import com.kosa.noticeserver.domain.model.NotificationDeliveryStatus;
 import com.kosa.noticeserver.domain.model.NotificationType;
 import com.kosa.noticeserver.infrastructure.repository.NotificationDeliveryRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -18,6 +20,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationDeliveryService {
+
+    static final Duration CLAIMED_RECOVERY_THRESHOLD = Duration.ofMinutes(10);
 
     private final NotificationDeliveryClaimer notificationDeliveryClaimer;
     private final NotificationDeliveryRepository notificationDeliveryRepository;
@@ -29,18 +33,38 @@ public class NotificationDeliveryService {
         }
 
         try {
+            LocalDateTime now = LocalDateTime.now();
             NotificationDelivery delivery = new NotificationDelivery(
                     eventId,
                     userId,
                     NotificationType.PAYMENT,
                     ChannelType.FCM,
-                    LocalDateTime.now()
+                    now
             );
             return Optional.of(notificationDeliveryClaimer.claim(delivery));
         } catch (DataIntegrityViolationException e) {
-            log.info("Duplicate notification delivery skipped. eventId={}, userId={}", eventId, userId);
+            LocalDateTime now = LocalDateTime.now();
+            Optional<NotificationDelivery> reclaimed = notificationDeliveryClaimer.reclaimPaymentFcmDelivery(
+                    eventId,
+                    userId,
+                    now.minus(CLAIMED_RECOVERY_THRESHOLD),
+                    now
+            );
+            if (reclaimed.isPresent()) {
+                log.info("Notification delivery reclaimed. eventId={}, userId={}", eventId, userId);
+                return reclaimed;
+            }
+
+            log.info("Duplicate active notification delivery skipped. eventId={}, userId={}", eventId, userId);
             return Optional.empty();
         }
+    }
+
+    public long countStaleClaimedDeliveries() {
+        return notificationDeliveryRepository.countByStatusAndClaimedAtBefore(
+                NotificationDeliveryStatus.CLAIMED,
+                LocalDateTime.now().minus(CLAIMED_RECOVERY_THRESHOLD)
+        );
     }
 
     @Transactional

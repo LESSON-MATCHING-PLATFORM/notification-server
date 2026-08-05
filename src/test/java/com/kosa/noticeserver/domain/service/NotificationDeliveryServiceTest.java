@@ -1,12 +1,15 @@
 package com.kosa.noticeserver.domain.service;
 
 import com.kosa.noticeserver.domain.model.NotificationDelivery;
+import com.kosa.noticeserver.domain.model.ChannelType;
 import com.kosa.noticeserver.domain.model.NotificationDeliveryStatus;
+import com.kosa.noticeserver.domain.model.NotificationType;
 import com.kosa.noticeserver.infrastructure.repository.NotificationDeliveryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,10 +46,12 @@ class NotificationDeliveryServiceTest {
     }
 
     @Test
-    @DisplayName("unique key 충돌은 중복 delivery로 판단하고 empty를 반환한다")
-    void claimPaymentFcmDelivery_whenDuplicate_returnsEmpty() {
+    @DisplayName("unique key 충돌 후 reclaim 대상이 아니면 중복 delivery로 판단하고 empty를 반환한다")
+    void claimPaymentFcmDelivery_whenDuplicateIsNotReclaimable_returnsEmpty() {
         when(notificationDeliveryClaimer.claim(any(NotificationDelivery.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
+        when(notificationDeliveryClaimer.reclaimPaymentFcmDelivery(any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
 
         Optional<NotificationDelivery> claimed = notificationDeliveryService.claimPaymentFcmDelivery(
                 "event-001",
@@ -54,6 +59,29 @@ class NotificationDeliveryServiceTest {
         );
 
         assertThat(claimed).isEmpty();
+    }
+
+    @Test
+    @DisplayName("unique key 충돌 후 reclaim 대상이면 delivery를 반환한다")
+    void claimPaymentFcmDelivery_whenDuplicateIsReclaimable_returnsReclaimedDelivery() {
+        NotificationDelivery reclaimed = new NotificationDelivery(
+                "event-001",
+                "user-001",
+                NotificationType.PAYMENT,
+                ChannelType.FCM,
+                LocalDateTime.now()
+        );
+        when(notificationDeliveryClaimer.claim(any(NotificationDelivery.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate"));
+        when(notificationDeliveryClaimer.reclaimPaymentFcmDelivery(any(), any(), any(), any()))
+                .thenReturn(Optional.of(reclaimed));
+
+        Optional<NotificationDelivery> claimed = notificationDeliveryService.claimPaymentFcmDelivery(
+                "event-001",
+                "user-001"
+        );
+
+        assertThat(claimed).containsSame(reclaimed);
     }
 
     @Test
