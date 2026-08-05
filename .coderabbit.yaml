@@ -1,0 +1,13 @@
+# .coderabbit.yaml
+language: "ko-KR"
+
+reviews:
+  profile: "assertive"
+  request_tools:
+    enabled: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+chat:
+  auto_reply: true
