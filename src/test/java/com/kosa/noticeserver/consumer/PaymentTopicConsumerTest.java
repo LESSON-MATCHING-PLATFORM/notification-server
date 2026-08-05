@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,7 +25,7 @@ class PaymentTopicConsumerTest {
     void consumePaymentEvent_whenPayloadIsInvalid_doesNotRetry() {
         consumer.consumePaymentEvent("{invalid", "event-001");
 
-        verify(notificationService, never()).notice(any(PaymentEvent.class));
+        verify(notificationService, never()).notice(any(PaymentEvent.class), any());
     }
 
     @Test
@@ -32,7 +33,7 @@ class PaymentTopicConsumerTest {
     void consumePaymentEvent_whenUnexpectedNotificationFailure_propagatesException() {
         doThrow(new IllegalStateException("database down"))
                 .when(notificationService)
-                .notice(any(PaymentEvent.class));
+                .notice(any(PaymentEvent.class), eq("event-001"));
 
         assertThatThrownBy(() -> consumer.consumePaymentEvent(paymentPayload(), "event-001"))
                 .isInstanceOf(IllegalStateException.class);

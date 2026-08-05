@@ -21,8 +21,9 @@ public class PaymentEventNotificationService {
     private final TokenRepository tokenRepository;
     private final FCMSender fcmsender;
     private final NotificationService notificationService;
+    private final NotificationDeliveryService notificationDeliveryService;
 
-    public void notice(PaymentEvent paymentEvent) {
+    public void notice(PaymentEvent paymentEvent, String eventId) {
 
         boolean isSendEnabled = notificationService.canSend(paymentEvent.getUserId(), NotificationType.PAYMENT);
 
@@ -36,10 +37,21 @@ public class PaymentEventNotificationService {
 
         if (tokens.isEmpty()) return;
 
+        Optional<NotificationDelivery> delivery = notificationDeliveryService.claimPaymentFcmDelivery(
+                eventId,
+                paymentEvent.getUserId()
+        );
+        if (delivery.isEmpty()) return;
+
         List<SendNotificationCommand> commands = tokens.stream().map(token -> buildNotification(token, paymentEvent)).toList();
 
         try {
             SendBatchResult send = fcmsender.send(commands);
+            if (send.successCount() > 0) {
+                notificationDeliveryService.markSent(delivery.get());
+            } else {
+                notificationDeliveryService.markFailed(delivery.get(), firstErrorMessage(send));
+            }
 
             for (SendDetails detail : send.results()) {
                 if (detail.isSuccess()) {
@@ -50,10 +62,11 @@ public class PaymentEventNotificationService {
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
+            notificationDeliveryService.markFailed(delivery.get(), e.getMessage());
         }
     }
 
-    public void notice(List<PaymentEvent> paymentEvents) {
+    public void notice(List<PaymentEvent> paymentEvents, String eventId) {
 
         List<String> userIds = paymentEvents.stream().map(PaymentEvent::getUserId).distinct().toList();
 
@@ -78,6 +91,7 @@ public class PaymentEventNotificationService {
                         )
                 );
 
+        Map<String, NotificationDelivery> claimedDeliveries = new HashMap<>();
         List<SendNotificationCommand> list = paymentEvents.stream()
                 .flatMap(event -> {
                     if (tokens.isEmpty()) {
@@ -87,6 +101,15 @@ public class PaymentEventNotificationService {
 
                     List<String> userTokens = tokens.getOrDefault(event.getUserId(), Collections.emptyList());
                     log.info("[{}] user: {}, tokenCount : {}", MDC.get("eventId"), event.getUserId(), userTokens.size());
+                    if (userTokens.isEmpty()) return Stream.empty();
+
+                    Optional<NotificationDelivery> delivery = notificationDeliveryService.claimPaymentFcmDelivery(
+                            eventId,
+                            event.getUserId()
+                    );
+                    if (delivery.isEmpty()) return Stream.empty();
+
+                    claimedDeliveries.put(event.getUserId(), delivery.get());
                     return userTokens.stream().map(token -> buildNotification(token, event));
 
                 })
@@ -96,6 +119,7 @@ public class PaymentEventNotificationService {
 
         try {
             SendBatchResult result = fcmsender.send(list);
+            markBulkDeliveryResults(result, claimedDeliveries);
             for (SendDetails detail : result.results()) {
                 if (detail.isSuccess()) {
                     log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
@@ -105,8 +129,41 @@ public class PaymentEventNotificationService {
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
+            claimedDeliveries.values()
+                    .forEach(delivery -> notificationDeliveryService.markFailed(delivery, e.getMessage()));
         }
 
+    }
+
+    private void markBulkDeliveryResults(
+            SendBatchResult result,
+            Map<String, NotificationDelivery> claimedDeliveries
+    ) {
+        Map<String, List<SendDetails>> detailsByUserId = result.results().stream()
+                .collect(Collectors.groupingBy(detail -> detail.originalCommand().data().getOrDefault("userId", "")));
+
+        for (Map.Entry<String, NotificationDelivery> entry : claimedDeliveries.entrySet()) {
+            List<SendDetails> details = detailsByUserId.getOrDefault(entry.getKey(), Collections.emptyList());
+            boolean hasSuccess = details.stream().anyMatch(SendDetails::isSuccess);
+            if (hasSuccess) {
+                notificationDeliveryService.markSent(entry.getValue());
+            } else {
+                String errorMessage = details.stream()
+                        .map(SendDetails::errorMessage)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse("FCM send failed");
+                notificationDeliveryService.markFailed(entry.getValue(), errorMessage);
+            }
+        }
+    }
+
+    private String firstErrorMessage(SendBatchResult send) {
+        return send.results().stream()
+                .map(SendDetails::errorMessage)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("FCM send failed");
     }
 
     private SendNotificationCommand buildNotification(String token, PaymentEvent event) {
