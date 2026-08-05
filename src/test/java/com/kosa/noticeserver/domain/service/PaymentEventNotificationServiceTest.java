@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -35,18 +35,15 @@ class PaymentEventNotificationServiceTest {
     );
 
     @Test
-    @DisplayName("FCM batch 요청 자체가 실패하면 consumer 재시도를 위해 예외를 전파한다")
-    void notice_whenFcmBatchRequestFails_throwsNotificationDeliveryException() throws Throwable {
+    @DisplayName("FCM batch 요청 자체가 실패해도 중복 발송 방어 전에는 재시도 예외를 전파하지 않는다")
+    void notice_whenFcmBatchRequestFails_doesNotPropagateRetryableException() throws Throwable {
         PaymentEvent event = paymentEvent();
 
         when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
         when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001"));
         when(fcmSender.send(anyList())).thenThrow(new IllegalStateException("fcm down"));
 
-        assertThatThrownBy(() -> service.notice(event))
-                .isInstanceOf(NotificationDeliveryException.class)
-                .hasMessageContaining("FCM payment notification send failed")
-                .hasRootCauseMessage("fcm down");
+        assertDoesNotThrow(() -> service.notice(event));
     }
 
     @Test

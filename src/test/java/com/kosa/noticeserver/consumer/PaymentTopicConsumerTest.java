@@ -2,7 +2,6 @@ package com.kosa.noticeserver.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
-import com.kosa.noticeserver.domain.service.NotificationDeliveryException;
 import com.kosa.noticeserver.domain.service.PaymentEventNotificationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,14 +28,14 @@ class PaymentTopicConsumerTest {
     }
 
     @Test
-    @DisplayName("알림 처리 실패는 Kafka error handler 재시도를 위해 예외를 전파한다")
-    void consumePaymentEvent_whenNotificationFails_propagatesException() {
-        doThrow(new NotificationDeliveryException("temporary fcm failure", new RuntimeException("fcm down")))
+    @DisplayName("알림 처리 중 예상하지 못한 예외는 listener 밖으로 전파한다")
+    void consumePaymentEvent_whenUnexpectedNotificationFailure_propagatesException() {
+        doThrow(new IllegalStateException("database down"))
                 .when(notificationService)
                 .notice(any(PaymentEvent.class));
 
         assertThatThrownBy(() -> consumer.consumePaymentEvent(paymentPayload(), "event-001"))
-                .isInstanceOf(NotificationDeliveryException.class);
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private String paymentPayload() {

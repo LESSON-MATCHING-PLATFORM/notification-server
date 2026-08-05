@@ -50,7 +50,6 @@ public class PaymentEventNotificationService {
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
-            throw new NotificationDeliveryException("FCM payment notification send failed", e);
         }
     }
 
@@ -106,7 +105,6 @@ public class PaymentEventNotificationService {
             }
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
-            throw new NotificationDeliveryException("FCM payment bulk notification send failed", e);
         }
 
     }
