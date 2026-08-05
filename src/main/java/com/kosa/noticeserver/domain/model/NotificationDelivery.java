@@ -25,22 +25,22 @@ public class NotificationDelivery {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "event_id", nullable = false)
+    @Column(name = "event_id", nullable = false, length = 191)
     private String eventId;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id", nullable = false, length = 191)
     private String userId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "notification_type", nullable = false)
+    @Column(name = "notification_type", nullable = false, length = 50)
     private NotificationType notificationType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "channel_type", nullable = false)
+    @Column(name = "channel_type", nullable = false, length = 50)
     private ChannelType channelType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 50)
     private NotificationDeliveryStatus status;
 
     @Column(name = "claimed_at", nullable = false)

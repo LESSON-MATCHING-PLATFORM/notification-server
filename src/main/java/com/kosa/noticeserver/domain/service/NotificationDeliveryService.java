@@ -19,9 +19,9 @@ import java.util.Optional;
 @Slf4j
 public class NotificationDeliveryService {
 
+    private final NotificationDeliveryClaimer notificationDeliveryClaimer;
     private final NotificationDeliveryRepository notificationDeliveryRepository;
 
-    @Transactional
     public Optional<NotificationDelivery> claimPaymentFcmDelivery(String eventId, String userId) {
         if (!StringUtils.hasText(eventId)) {
             log.error("Notification delivery eventId is blank. userId={}", userId);
@@ -36,7 +36,7 @@ public class NotificationDeliveryService {
                     ChannelType.FCM,
                     LocalDateTime.now()
             );
-            return Optional.of(notificationDeliveryRepository.saveAndFlush(delivery));
+            return Optional.of(notificationDeliveryClaimer.claim(delivery));
         } catch (DataIntegrityViolationException e) {
             log.info("Duplicate notification delivery skipped. eventId={}, userId={}", eventId, userId);
             return Optional.empty();

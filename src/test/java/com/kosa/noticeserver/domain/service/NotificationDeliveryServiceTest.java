@@ -18,15 +18,17 @@ import static org.mockito.Mockito.when;
 
 class NotificationDeliveryServiceTest {
 
+    private final NotificationDeliveryClaimer notificationDeliveryClaimer = mock(NotificationDeliveryClaimer.class);
     private final NotificationDeliveryRepository notificationDeliveryRepository = mock(NotificationDeliveryRepository.class);
     private final NotificationDeliveryService notificationDeliveryService = new NotificationDeliveryService(
+            notificationDeliveryClaimer,
             notificationDeliveryRepository
     );
 
     @Test
     @DisplayName("eventId와 사용자 기준으로 FCM 결제 알림 delivery를 claim한다")
     void claimPaymentFcmDelivery_savesDelivery() {
-        when(notificationDeliveryRepository.saveAndFlush(any(NotificationDelivery.class)))
+        when(notificationDeliveryClaimer.claim(any(NotificationDelivery.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<NotificationDelivery> claimed = notificationDeliveryService.claimPaymentFcmDelivery(
@@ -43,7 +45,7 @@ class NotificationDeliveryServiceTest {
     @Test
     @DisplayName("unique key 충돌은 중복 delivery로 판단하고 empty를 반환한다")
     void claimPaymentFcmDelivery_whenDuplicate_returnsEmpty() {
-        when(notificationDeliveryRepository.saveAndFlush(any(NotificationDelivery.class)))
+        when(notificationDeliveryClaimer.claim(any(NotificationDelivery.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
         Optional<NotificationDelivery> claimed = notificationDeliveryService.claimPaymentFcmDelivery(
@@ -63,6 +65,6 @@ class NotificationDeliveryServiceTest {
         );
 
         assertThat(claimed).isEmpty();
-        verify(notificationDeliveryRepository, never()).saveAndFlush(any());
+        verify(notificationDeliveryClaimer, never()).claim(any());
     }
 }
