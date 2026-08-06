@@ -36,12 +36,13 @@ public class FCMSender implements NotificationSender {
         for (int i = 0; i < batchResponse.getResponses().size(); i++) {
             SendResponse sendResponse = batchResponse.getResponses().get(i);
             SendNotificationCommand originalCommand = commands.get(i);
+            FirebaseMessagingException exception = sendResponse.getException();
 
             results.add(new SendDetails(
                     sendResponse.isSuccessful(),
                     sendResponse.getMessageId(),
-                    sendResponse.getException().getMessage(),
-                    !sendResponse.isSuccessful() ? sendResponse.getException().getErrorCode().toString() : null,
+                    exception == null ? null : exception.getMessage(),
+                    resolveErrorCode(exception),
                     originalCommand
             ));
         }
@@ -55,13 +56,30 @@ public class FCMSender implements NotificationSender {
     }
 
     private Message buildMessage(SendNotificationCommand command) {
-        return Message.builder()
+        Message.Builder builder = Message.builder()
                 .setToken(command.target())
                 .setNotification(
                         Notification.builder()
                             .setTitle(command.title())
                             .setBody(command.body())
-                            .build())
-                .build();
+                            .build());
+
+        if (command.data() != null && !command.data().isEmpty()) {
+            builder.putAllData(command.data());
+        }
+
+        return builder.build();
+    }
+
+    static String resolveErrorCode(FirebaseMessagingException exception) {
+        if (exception == null) {
+            return null;
+        }
+
+        if (exception.getMessagingErrorCode() != null) {
+            return exception.getMessagingErrorCode().toString();
+        }
+
+        return exception.getErrorCode() == null ? null : exception.getErrorCode().toString();
     }
 }

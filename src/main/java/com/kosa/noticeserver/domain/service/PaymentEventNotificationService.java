@@ -4,6 +4,7 @@ import com.kosa.noticeserver.domain.model.*;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
 import com.kosa.noticeserver.infrastructure.repository.TokenRepository;
 import com.kosa.noticeserver.infrastructure.sender.fcm.FCMSender;
+import com.kosa.noticeserver.infrastructure.sender.fcm.FcmFailureClassifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jboss.logging.MDC;
@@ -22,6 +23,7 @@ public class PaymentEventNotificationService {
     private final FCMSender fcmsender;
     private final NotificationService notificationService;
     private final NotificationDeliveryService notificationDeliveryService;
+    private final FcmFailureClassifier fcmFailureClassifier;
 
     public void notice(PaymentEvent paymentEvent, String eventId) {
 
@@ -43,7 +45,9 @@ public class PaymentEventNotificationService {
         );
         if (delivery.isEmpty()) return;
 
-        List<SendNotificationCommand> commands = tokens.stream().map(token -> buildNotification(token, paymentEvent)).toList();
+        List<SendNotificationCommand> commands = tokens.stream()
+                .map(token -> buildNotification(token, paymentEvent, eventId))
+                .toList();
 
         SendBatchResult send;
         try {
@@ -53,6 +57,8 @@ public class PaymentEventNotificationService {
             notificationDeliveryService.markFailed(delivery.get(), e.getMessage());
             return;
         }
+
+        cleanupInvalidTokens(send.results());
 
         if (send.successCount() > 0) {
             notificationDeliveryService.markSent(delivery.get());
@@ -113,7 +119,7 @@ public class PaymentEventNotificationService {
                     if (delivery.isEmpty()) return Stream.empty();
 
                     claimedDeliveries.put(event.getUserId(), delivery.get());
-                    return userTokens.stream().map(token -> buildNotification(token, event));
+                    return userTokens.stream().map(token -> buildNotification(token, event, eventId));
 
                 })
                 .toList();
@@ -130,6 +136,7 @@ public class PaymentEventNotificationService {
             return;
         }
 
+        cleanupInvalidTokens(result.results());
         markBulkDeliveryResults(result, claimedDeliveries);
         for (SendDetails detail : result.results()) {
             if (detail.isSuccess()) {
@@ -167,7 +174,30 @@ public class PaymentEventNotificationService {
                 .orElse("FCM send failed");
     }
 
-    private SendNotificationCommand buildNotification(String token, PaymentEvent event) {
+    private void cleanupInvalidTokens(List<SendDetails> details) {
+        List<String> invalidTokens = details.stream()
+                .filter(detail -> !detail.isSuccess())
+                .filter(fcmFailureClassifier::isInvalidToken)
+                .map(SendDetails::originalCommand)
+                .filter(Objects::nonNull)
+                .map(SendNotificationCommand::target)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (invalidTokens.isEmpty()) {
+            return;
+        }
+
+        try {
+            long deletedCount = tokenRepository.deleteByTokenIn(invalidTokens);
+            log.warn("[{}] invalid FCM tokens deleted, tokenCount: {}", MDC.get("eventId"), deletedCount);
+        } catch (RuntimeException e) {
+            log.error("[{}] invalid FCM token cleanup failed, tokenCount: {}", MDC.get("eventId"), invalidTokens.size(), e);
+        }
+    }
+
+    private SendNotificationCommand buildNotification(String token, PaymentEvent event, String eventId) {
         String title = "결제 완료 안내";
         String body = String.format("%s님, %s원 결제가 정상 처리되었습니다.",
                 event.getUserName(), event.getAmount());
@@ -176,6 +206,9 @@ public class PaymentEventNotificationService {
         data.put("orderId", event.getOrderId());
         data.put("paymentTime", event.getTimestamp());
         data.put("userId", event.getUserId());
+        data.put("eventId", eventId);
+        data.put("notificationType", NotificationType.PAYMENT.name());
+        data.put("dedupKey", "PAYMENT_COMPLETED:" + event.getOrderId());
 
         return new SendNotificationCommand(
                 token,
