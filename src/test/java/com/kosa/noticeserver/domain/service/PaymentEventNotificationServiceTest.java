@@ -78,11 +78,12 @@ class PaymentEventNotificationServiceTest {
     @DisplayName("같은 eventId와 사용자 조합을 두 번 처리해도 FCM은 한 번만 발송한다")
     void notice_whenSameEventAndUserIsConsumedTwice_sendsFcmOnce() throws Throwable {
         PaymentEvent event = paymentEvent();
+        NotificationDelivery delivery = delivery("event-001", "user-001");
 
         when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
         when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001"));
         when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
-                .thenReturn(Optional.of(delivery("event-001", "user-001")))
+                .thenReturn(Optional.of(delivery))
                 .thenReturn(Optional.empty());
         when(fcmSender.send(anyList())).thenReturn(new SendBatchResult(
                 List.of(new SendDetails(true, "message-001", null, null, command("token-001", "user-001"))),
@@ -94,6 +95,8 @@ class PaymentEventNotificationServiceTest {
         service.notice(event, "event-001");
 
         verify(fcmSender, times(1)).send(anyList());
+        verify(notificationDeliveryService, times(1)).markSent(delivery);
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
     }
 
     @Test
@@ -147,6 +150,7 @@ class PaymentEventNotificationServiceTest {
         PaymentEvent newEvent = paymentEvent("user-002");
         TokenEntity claimedToken = new TokenEntity("token-001", "user-001");
         TokenEntity newToken = new TokenEntity("token-002", "user-002");
+        NotificationDelivery newDelivery = delivery("event-001", "user-002");
 
         when(notificationService.canSend(List.of("user-001", "user-002"), NotificationType.PAYMENT))
                 .thenReturn(Map.of("user-001", true, "user-002", true));
@@ -155,7 +159,7 @@ class PaymentEventNotificationServiceTest {
         when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
                 .thenReturn(Optional.empty());
         when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-002"))
-                .thenReturn(Optional.of(delivery("event-001", "user-002")));
+                .thenReturn(Optional.of(newDelivery));
         when(fcmSender.send(anyList())).thenReturn(new SendBatchResult(
                 List.of(new SendDetails(true, "message-001", null, null, command("token-002", "user-002"))),
                 1,
@@ -168,6 +172,43 @@ class PaymentEventNotificationServiceTest {
         verify(fcmSender).send(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().getFirst().target()).isEqualTo("token-002");
+        verify(notificationDeliveryService).markSent(newDelivery);
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
+    }
+
+    @Test
+    @DisplayName("bulk 알림 결과를 사용자별로 집계해 성공 사용자는 성공, 실패 사용자만 실패로 기록한다")
+    void noticeBulk_whenResultsAreMixed_marksDeliveryByUserResult() throws Throwable {
+        PaymentEvent successEvent = paymentEvent("user-001");
+        PaymentEvent failedEvent = paymentEvent("user-002");
+        TokenEntity successToken = new TokenEntity("token-001", "user-001");
+        TokenEntity partialFailureToken = new TokenEntity("token-002", "user-001");
+        TokenEntity failedToken = new TokenEntity("token-003", "user-002");
+        NotificationDelivery successDelivery = delivery("event-001", "user-001");
+        NotificationDelivery failedDelivery = delivery("event-001", "user-002");
+
+        when(notificationService.canSend(List.of("user-001", "user-002"), NotificationType.PAYMENT))
+                .thenReturn(Map.of("user-001", true, "user-002", true));
+        when(tokenRepository.findAllByUserIdIn(List.of("user-001", "user-002")))
+                .thenReturn(List.of(successToken, partialFailureToken, failedToken));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(successDelivery));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-002"))
+                .thenReturn(Optional.of(failedDelivery));
+        when(fcmSender.send(anyList())).thenReturn(new SendBatchResult(
+                List.of(
+                        new SendDetails(true, "message-001", null, null, command("token-001", "user-001")),
+                        new SendDetails(false, null, "token expired", null, command("token-002", "user-001")),
+                        new SendDetails(false, null, "fcm down", null, command("token-003", "user-002"))
+                ),
+                1,
+                2
+        ));
+
+        service.notice(List.of(successEvent, failedEvent), "event-001");
+
+        verify(notificationDeliveryService).markSent(successDelivery);
+        verify(notificationDeliveryService).markFailed(failedDelivery, "fcm down");
     }
 
     private NotificationDelivery delivery(String eventId, String userId) {
