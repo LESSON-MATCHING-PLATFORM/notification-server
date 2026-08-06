@@ -11,6 +11,7 @@ import com.kosa.noticeserver.domain.model.TokenEntity;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
 import com.kosa.noticeserver.infrastructure.repository.TokenRepository;
 import com.kosa.noticeserver.infrastructure.sender.fcm.FCMSender;
+import com.kosa.noticeserver.infrastructure.sender.fcm.FcmFailureClassifier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -39,11 +40,13 @@ class PaymentEventNotificationServiceTest {
     private final FCMSender fcmSender = mock(FCMSender.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final NotificationDeliveryService notificationDeliveryService = mock(NotificationDeliveryService.class);
+    private final FcmFailureClassifier fcmFailureClassifier = mock(FcmFailureClassifier.class);
     private final PaymentEventNotificationService service = new PaymentEventNotificationService(
             tokenRepository,
             fcmSender,
             notificationService,
-            notificationDeliveryService
+            notificationDeliveryService,
+            fcmFailureClassifier
     );
 
     @Test
@@ -97,7 +100,96 @@ class PaymentEventNotificationServiceTest {
         service.notice(event, "event-001");
 
         verify(fcmSender, times(1)).send(anyList());
+        ArgumentCaptor<List<SendNotificationCommand>> captor = ArgumentCaptor.forClass(List.class);
+        verify(fcmSender).send(captor.capture());
+        Map<String, String> data = captor.getValue().getFirst().data();
+        assertThat(data).containsEntry("eventId", "event-001");
+        assertThat(data).containsEntry("notificationType", NotificationType.PAYMENT.name());
+        assertThat(data).containsEntry("dedupKey", "PAYMENT_COMPLETED:order-001");
         verify(notificationDeliveryService, times(1)).markSent(delivery);
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
+    }
+
+    @Test
+    @DisplayName("FCM 응답이 invalid token이면 토큰을 정리하고 delivery 실패로 기록한다")
+    void notice_whenFcmResultContainsInvalidToken_deletesToken() throws Throwable {
+        PaymentEvent event = paymentEvent();
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
+        when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001"));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenAnswer(invocation -> {
+            List<SendNotificationCommand> commands = invocation.getArgument(0);
+            return new SendBatchResult(
+                    List.of(new SendDetails(false, null, "token unregistered", "UNREGISTERED", commands.getFirst())),
+                    0,
+                    1
+            );
+        });
+        when(fcmFailureClassifier.isInvalidToken(any(SendDetails.class))).thenReturn(true);
+
+        service.notice(event, "event-001");
+
+        verify(tokenRepository).deleteByTokenIn(List.of("token-001"));
+        verify(notificationDeliveryService).markFailed(delivery, "token unregistered");
+    }
+
+    @Test
+    @DisplayName("FCM 응답 실패가 invalid token이 아니면 토큰을 삭제하지 않는다")
+    void notice_whenFcmResultFailureIsNotInvalidToken_keepsToken() throws Throwable {
+        PaymentEvent event = paymentEvent();
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
+        when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001"));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenAnswer(invocation -> {
+            List<SendNotificationCommand> commands = invocation.getArgument(0);
+            return new SendBatchResult(
+                    List.of(new SendDetails(false, null, "fcm unavailable", "UNAVAILABLE", commands.getFirst())),
+                    0,
+                    1
+            );
+        });
+        when(fcmFailureClassifier.isInvalidToken(any(SendDetails.class))).thenReturn(false);
+
+        service.notice(event, "event-001");
+
+        verify(tokenRepository, never()).deleteByTokenIn(anyList());
+        verify(notificationDeliveryService).markFailed(delivery, "fcm unavailable");
+    }
+
+    @Test
+    @DisplayName("invalid token 정리에 실패해도 delivery 성공 기록은 유지한다")
+    void notice_whenInvalidTokenCleanupFails_marksDeliveryResult() throws Throwable {
+        PaymentEvent event = paymentEvent();
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
+        when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001", "token-002"));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenAnswer(invocation -> {
+            List<SendNotificationCommand> commands = invocation.getArgument(0);
+            return new SendBatchResult(
+                    List.of(
+                            new SendDetails(true, "message-001", null, null, commands.get(0)),
+                            new SendDetails(false, null, "token unregistered", "UNREGISTERED", commands.get(1))
+                    ),
+                    1,
+                    1
+            );
+        });
+        when(fcmFailureClassifier.isInvalidToken(any(SendDetails.class))).thenReturn(true);
+        when(tokenRepository.deleteByTokenIn(List.of("token-002")))
+                .thenThrow(new IllegalStateException("db down"));
+
+        service.notice(event, "event-001");
+
+        verify(notificationDeliveryService).markSent(delivery);
         verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
     }
 
@@ -153,6 +245,8 @@ class PaymentEventNotificationServiceTest {
         verify(fcmSender).send(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().getFirst().target()).isEqualTo("token-001");
+        assertThat(captor.getValue().getFirst().data()).containsEntry("eventId", "event-001");
+        assertThat(captor.getValue().getFirst().data()).containsEntry("dedupKey", "PAYMENT_COMPLETED:order-001");
     }
 
     @Test
@@ -236,6 +330,43 @@ class PaymentEventNotificationServiceTest {
 
         verify(notificationDeliveryService).markSent(successDelivery);
         verify(notificationDeliveryService).markFailed(failedDelivery, "fcm down");
+    }
+
+    @Test
+    @DisplayName("bulk 알림에서 invalid token 응답만 토큰 정리 대상으로 기록한다")
+    void noticeBulk_whenResultContainsInvalidToken_deletesOnlyInvalidTokens() throws Throwable {
+        PaymentEvent event = paymentEvent("user-001");
+        TokenEntity validToken = new TokenEntity("token-001", "user-001");
+        TokenEntity invalidToken = new TokenEntity("token-002", "user-001");
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend(List.of("user-001"), NotificationType.PAYMENT))
+                .thenReturn(Map.of("user-001", true));
+        when(tokenRepository.findAllByUserIdIn(List.of("user-001")))
+                .thenReturn(List.of(validToken, invalidToken));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenAnswer(invocation -> {
+            List<SendNotificationCommand> commands = invocation.getArgument(0);
+            return new SendBatchResult(
+                    List.of(
+                            new SendDetails(true, "message-001", null, null, commands.get(0)),
+                            new SendDetails(false, null, "token unregistered", "UNREGISTERED", commands.get(1))
+                    ),
+                    1,
+                    1
+            );
+        });
+        when(fcmFailureClassifier.isInvalidToken(any(SendDetails.class))).thenAnswer(invocation -> {
+            SendDetails details = invocation.getArgument(0);
+            return "UNREGISTERED".equals(details.errorCode());
+        });
+
+        service.notice(List.of(event), "event-001");
+
+        verify(tokenRepository).deleteByTokenIn(List.of("token-002"));
+        verify(notificationDeliveryService).markSent(delivery);
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
     }
 
     @Test
