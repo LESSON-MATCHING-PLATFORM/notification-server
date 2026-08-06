@@ -77,6 +77,37 @@ class PaymentEventNotificationServiceTest {
     }
 
     @Test
+    @DisplayName("알림 수신 설정이 꺼진 사용자는 토큰 조회와 FCM 발송을 건너뛴다")
+    void notice_whenSendSettingIsDisabled_skipsTokenLookupAndFcmSend() throws Throwable {
+        PaymentEvent event = paymentEvent();
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(false);
+
+        service.notice(event, "event-001");
+
+        verify(notificationService).canSend("user-001", NotificationType.PAYMENT);
+        verify(tokenRepository, never()).findAllTokensByUserId("user-001");
+        verify(notificationDeliveryService, never()).claimPaymentFcmDelivery(any(), any());
+        verify(fcmSender, never()).send(anyList());
+    }
+
+    @Test
+    @DisplayName("FCM 토큰이 없는 사용자는 delivery claim과 FCM 발송을 건너뛴다")
+    void notice_whenTokenIsMissing_skipsDeliveryClaimAndFcmSend() throws Throwable {
+        PaymentEvent event = paymentEvent();
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
+        when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of());
+
+        service.notice(event, "event-001");
+
+        verify(notificationService).canSend("user-001", NotificationType.PAYMENT);
+        verify(tokenRepository).findAllTokensByUserId("user-001");
+        verify(notificationDeliveryService, never()).claimPaymentFcmDelivery(any(), any());
+        verify(fcmSender, never()).send(anyList());
+    }
+
+    @Test
     @DisplayName("같은 eventId와 사용자 조합을 두 번 처리해도 FCM은 한 번만 발송한다")
     void notice_whenSameEventAndUserIsConsumedTwice_sendsFcmOnce() throws Throwable {
         PaymentEvent event = paymentEvent();

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -26,6 +27,14 @@ class PaymentTopicConsumerTest {
         consumer.consumePaymentEvent("{invalid", "event-001");
 
         verify(notificationService, never()).notice(any(PaymentEvent.class), any());
+    }
+
+    @Test
+    @DisplayName("잘못된 bulk JSON payload는 알림 처리 없이 소비한다")
+    void consumePaymentBulkEvent_whenPayloadIsInvalid_doesNotRetry() {
+        consumer.consumePaymentBulkEvent("{invalid", "event-001");
+
+        verify(notificationService, never()).notice(anyList(), any());
     }
 
     @Test
