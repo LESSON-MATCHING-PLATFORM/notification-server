@@ -50,7 +50,7 @@ public class PaymentEventNotificationService {
             if (send.successCount() > 0) {
                 notificationDeliveryService.markSent(delivery.get());
             } else {
-                notificationDeliveryService.markFailed(delivery.get(), firstErrorMessage(send));
+                notificationDeliveryService.markFailed(delivery.get(), firstErrorMessage(send.results()));
             }
 
             for (SendDetails detail : send.results()) {
@@ -148,18 +148,13 @@ public class PaymentEventNotificationService {
             if (hasSuccess) {
                 notificationDeliveryService.markSent(entry.getValue());
             } else {
-                String errorMessage = details.stream()
-                        .map(SendDetails::errorMessage)
-                        .filter(Objects::nonNull)
-                        .findFirst()
-                        .orElse("FCM send failed");
-                notificationDeliveryService.markFailed(entry.getValue(), errorMessage);
+                notificationDeliveryService.markFailed(entry.getValue(), firstErrorMessage(details));
             }
         }
     }
 
-    private String firstErrorMessage(SendBatchResult send) {
-        return send.results().stream()
+    private String firstErrorMessage(List<SendDetails> details) {
+        return details.stream()
                 .map(SendDetails::errorMessage)
                 .filter(Objects::nonNull)
                 .findFirst()
