@@ -45,24 +45,27 @@ public class PaymentEventNotificationService {
 
         List<SendNotificationCommand> commands = tokens.stream().map(token -> buildNotification(token, paymentEvent)).toList();
 
+        SendBatchResult send;
         try {
-            SendBatchResult send = fcmsender.send(commands);
-            if (send.successCount() > 0) {
-                notificationDeliveryService.markSent(delivery.get());
-            } else {
-                notificationDeliveryService.markFailed(delivery.get(), firstErrorMessage(send.results()));
-            }
-
-            for (SendDetails detail : send.results()) {
-                if (detail.isSuccess()) {
-                    log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
-                } else {
-                    log.error("[{}] user: {}, token : {}, FCM send failed, response : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
-                }
-            }
+            send = fcmsender.send(commands);
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
             notificationDeliveryService.markFailed(delivery.get(), e.getMessage());
+            return;
+        }
+
+        if (send.successCount() > 0) {
+            notificationDeliveryService.markSent(delivery.get());
+        } else {
+            notificationDeliveryService.markFailed(delivery.get(), firstErrorMessage(send.results()));
+        }
+
+        for (SendDetails detail : send.results()) {
+            if (detail.isSuccess()) {
+                log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target());
+            } else {
+                log.error("[{}] user: {}, token : {}, FCM send failed, response : {}", MDC.get("eventId"), paymentEvent.getUserId(), detail.originalCommand().target(), detail.errorMessage());
+            }
         }
     }
 
@@ -117,20 +120,23 @@ public class PaymentEventNotificationService {
 
         if (list.isEmpty()) return;
 
+        SendBatchResult result;
         try {
-            SendBatchResult result = fcmsender.send(list);
-            markBulkDeliveryResults(result, claimedDeliveries);
-            for (SendDetails detail : result.results()) {
-                if (detail.isSuccess()) {
-                    log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
-                } else {
-                    log.error("[{}] user: {}, token : {}, FCM send failed", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
-                }
-            }
+            result = fcmsender.send(list);
         } catch (Throwable e) {
             log.error("[Notice-Failed] FCM send error for event: {}", MDC.get("eventId"), e);
             claimedDeliveries.values()
                     .forEach(delivery -> notificationDeliveryService.markFailed(delivery, e.getMessage()));
+            return;
+        }
+
+        markBulkDeliveryResults(result, claimedDeliveries);
+        for (SendDetails detail : result.results()) {
+            if (detail.isSuccess()) {
+                log.info("[{}] user: {}, token : {}, FCM send success", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
+            } else {
+                log.error("[{}] user: {}, token : {}, FCM send failed", MDC.get("eventId"), detail.originalCommand().data().getOrDefault("userId", ""), detail.originalCommand().target());
+            }
         }
 
     }

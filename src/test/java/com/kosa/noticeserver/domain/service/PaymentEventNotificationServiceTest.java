@@ -21,10 +21,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -96,6 +98,31 @@ class PaymentEventNotificationServiceTest {
 
         verify(fcmSender, times(1)).send(anyList());
         verify(notificationDeliveryService, times(1)).markSent(delivery);
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
+    }
+
+    @Test
+    @DisplayName("FCM 발송 성공 후 성공 상태 저장에 실패하면 실패 delivery로 덮어쓰지 않고 예외를 전파한다")
+    void notice_whenMarkSentFailsAfterFcmSuccess_propagatesWithoutMarkFailed() throws Throwable {
+        PaymentEvent event = paymentEvent();
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend("user-001", NotificationType.PAYMENT)).thenReturn(true);
+        when(tokenRepository.findAllTokensByUserId("user-001")).thenReturn(List.of("token-001"));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenReturn(new SendBatchResult(
+                List.of(new SendDetails(true, "message-001", null, null, command("token-001", "user-001"))),
+                1,
+                0
+        ));
+        doThrow(new IllegalStateException("mark sent failed"))
+                .when(notificationDeliveryService)
+                .markSent(delivery);
+
+        assertThatThrownBy(() -> service.notice(event, "event-001"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("mark sent failed");
         verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
     }
 
@@ -209,6 +236,33 @@ class PaymentEventNotificationServiceTest {
 
         verify(notificationDeliveryService).markSent(successDelivery);
         verify(notificationDeliveryService).markFailed(failedDelivery, "fcm down");
+    }
+
+    @Test
+    @DisplayName("bulk FCM 발송 성공 후 상태 저장에 실패하면 전체 delivery를 실패로 덮어쓰지 않고 예외를 전파한다")
+    void noticeBulk_whenMarkSentFailsAfterFcmSuccess_propagatesWithoutMarkingAllFailed() throws Throwable {
+        PaymentEvent event = paymentEvent("user-001");
+        TokenEntity token = new TokenEntity("token-001", "user-001");
+        NotificationDelivery delivery = delivery("event-001", "user-001");
+
+        when(notificationService.canSend(List.of("user-001"), NotificationType.PAYMENT))
+                .thenReturn(Map.of("user-001", true));
+        when(tokenRepository.findAllByUserIdIn(List.of("user-001"))).thenReturn(List.of(token));
+        when(notificationDeliveryService.claimPaymentFcmDelivery("event-001", "user-001"))
+                .thenReturn(Optional.of(delivery));
+        when(fcmSender.send(anyList())).thenReturn(new SendBatchResult(
+                List.of(new SendDetails(true, "message-001", null, null, command("token-001", "user-001"))),
+                1,
+                0
+        ));
+        doThrow(new IllegalStateException("mark sent failed"))
+                .when(notificationDeliveryService)
+                .markSent(delivery);
+
+        assertThatThrownBy(() -> service.notice(List.of(event), "event-001"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("mark sent failed");
+        verify(notificationDeliveryService, never()).markFailed(any(NotificationDelivery.class), any());
     }
 
     private NotificationDelivery delivery(String eventId, String userId) {
