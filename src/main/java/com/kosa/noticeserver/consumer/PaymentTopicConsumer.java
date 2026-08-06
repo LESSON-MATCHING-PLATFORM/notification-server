@@ -34,7 +34,7 @@ public class PaymentTopicConsumer {
 
             log.info("Received Payment Event {}", paymentEvent);
 
-            paymentEventNotificationService.notice(paymentEvent);
+            paymentEventNotificationService.notice(paymentEvent, eventId);
         } catch (JsonProcessingException jsonProcessingException) {
             log.error("Failed to parse JSON: {}. Error: {}", payload, jsonProcessingException.getMessage());
         } finally {
@@ -56,7 +56,7 @@ public class PaymentTopicConsumer {
 
             log.info("Received Payment Bulk Event {}", paymentBulkEvent);
 
-            paymentEventNotificationService.notice(paymentBulkEvent.getEvents());
+            paymentEventNotificationService.notice(paymentBulkEvent.getEvents(), eventId);
         } catch (JsonProcessingException jsonProcessingException) {
             log.error("Failed to parse JSON: {}. Error: {}", payload, jsonProcessingException.getMessage());
         }  finally {
