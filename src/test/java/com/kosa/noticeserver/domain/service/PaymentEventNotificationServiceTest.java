@@ -85,6 +85,7 @@ class PaymentEventNotificationServiceTest {
 
         service.notice(event, "event-001");
 
+        verify(notificationService).canSend("user-001", NotificationType.PAYMENT);
         verify(tokenRepository, never()).findAllTokensByUserId("user-001");
         verify(notificationDeliveryService, never()).claimPaymentFcmDelivery(any(), any());
         verify(fcmSender, never()).send(anyList());
@@ -100,6 +101,8 @@ class PaymentEventNotificationServiceTest {
 
         service.notice(event, "event-001");
 
+        verify(notificationService).canSend("user-001", NotificationType.PAYMENT);
+        verify(tokenRepository).findAllTokensByUserId("user-001");
         verify(notificationDeliveryService, never()).claimPaymentFcmDelivery(any(), any());
         verify(fcmSender, never()).send(anyList());
     }
