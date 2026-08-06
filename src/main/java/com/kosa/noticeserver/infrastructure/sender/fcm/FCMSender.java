@@ -42,7 +42,7 @@ public class FCMSender implements NotificationSender {
                     sendResponse.isSuccessful(),
                     sendResponse.getMessageId(),
                     exception == null ? null : exception.getMessage(),
-                    exception == null || exception.getErrorCode() == null ? null : exception.getErrorCode().toString(),
+                    resolveErrorCode(exception),
                     originalCommand
             ));
         }
@@ -69,5 +69,17 @@ public class FCMSender implements NotificationSender {
         }
 
         return builder.build();
+    }
+
+    static String resolveErrorCode(FirebaseMessagingException exception) {
+        if (exception == null) {
+            return null;
+        }
+
+        if (exception.getMessagingErrorCode() != null) {
+            return exception.getMessagingErrorCode().toString();
+        }
+
+        return exception.getErrorCode() == null ? null : exception.getErrorCode().toString();
     }
 }
