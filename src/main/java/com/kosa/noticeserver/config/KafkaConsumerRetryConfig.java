@@ -26,12 +26,17 @@ public class KafkaConsumerRetryConfig {
     }
 
     private void logExhaustedRecord(ConsumerRecord<?, ?> record, Exception exception) {
+        KafkaFailureLogContext context = KafkaFailureLogContext.from(record, exception);
+
         log.error(
-                "Kafka consumer retry exhausted. topic={}, partition={}, offset={}, key={}",
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                record.key(),
+                "Kafka consumer retry exhausted. topic={}, partition={}, offset={}, key={}, eventId={}, exceptionClass={}, exceptionMessage={}",
+                context.topic(),
+                context.partition(),
+                context.offset(),
+                context.key(),
+                context.eventId(),
+                context.exceptionClass(),
+                context.exceptionMessage(),
                 exception
         );
     }

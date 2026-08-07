@@ -36,7 +36,7 @@ public class PaymentTopicConsumer {
 
             paymentEventNotificationService.notice(paymentEvent, eventId);
         } catch (JsonProcessingException jsonProcessingException) {
-            log.error("Failed to parse JSON: {}. Error: {}", payload, jsonProcessingException.getMessage());
+            logInvalidPayload("payment-topic", payload, jsonProcessingException);
         } finally {
             MDC.clear();
         }
@@ -58,9 +58,20 @@ public class PaymentTopicConsumer {
 
             paymentEventNotificationService.notice(paymentBulkEvent.getEvents(), eventId);
         } catch (JsonProcessingException jsonProcessingException) {
-            log.error("Failed to parse JSON: {}. Error: {}", payload, jsonProcessingException.getMessage());
+            logInvalidPayload("payment-bulk-topic", payload, jsonProcessingException);
         }  finally {
             MDC.clear();
         }
+    }
+
+    private void logInvalidPayload(String topic, String payload, JsonProcessingException exception) {
+        log.error(
+                "Kafka payload parsing failed. topic={}, eventId={}, exceptionClass={}, exceptionMessage={}, payloadLength={}",
+                topic,
+                MDC.get("eventId"),
+                exception.getClass().getName(),
+                exception.getOriginalMessage(),
+                payload == null ? 0 : payload.length()
+        );
     }
 }
