@@ -65,13 +65,12 @@ public class PaymentTopicConsumer {
     }
 
     private void logInvalidPayload(String topic, String payload, JsonProcessingException exception) {
-        log.error(
-                "Kafka payload parsing failed. topic={}, eventId={}, exceptionClass={}, exceptionMessage={}, payloadLength={}",
-                topic,
-                MDC.get("eventId"),
-                exception.getClass().getName(),
-                exception.getOriginalMessage(),
-                payload == null ? 0 : payload.length()
-        );
+        log.atError()
+                .addKeyValue("topic", topic)
+                .addKeyValue("eventId", MDC.get("eventId"))
+                .addKeyValue("exceptionClass", exception.getClass().getName())
+                .addKeyValue("exceptionMessage", exception.getOriginalMessage())
+                .addKeyValue("payloadLength", payload == null ? 0 : payload.length())
+                .log("Kafka payload parsing failed");
     }
 }
