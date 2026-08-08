@@ -30,6 +30,16 @@ public class PaymentTopicConsumer {
         MDC.put("eventId", eventId);
 
         try {
+            if (payload == null) {
+                logInvalidPayload(
+                        "payment-topic",
+                        null,
+                        IllegalArgumentException.class,
+                        "Kafka payload is null"
+                );
+                return;
+            }
+
             PaymentEvent paymentEvent = objectMapper.readValue(payload, PaymentEvent.class);
 
             log.info("Received Payment Event {}", paymentEvent);
@@ -52,6 +62,16 @@ public class PaymentTopicConsumer {
         MDC.put("eventId", eventId);
 
         try {
+            if (payload == null) {
+                logInvalidPayload(
+                        "payment-bulk-topic",
+                        null,
+                        IllegalArgumentException.class,
+                        "Kafka payload is null"
+                );
+                return;
+            }
+
             PaymentBulkEvent paymentBulkEvent = objectMapper.readValue(payload, PaymentBulkEvent.class);
 
             log.info("Received Payment Bulk Event {}", paymentBulkEvent);
@@ -70,6 +90,21 @@ public class PaymentTopicConsumer {
                 .addKeyValue("eventId", MDC.get("eventId"))
                 .addKeyValue("exceptionClass", exception.getClass().getName())
                 .addKeyValue("exceptionMessage", exception.getOriginalMessage())
+                .addKeyValue("payloadLength", payload == null ? 0 : payload.length())
+                .log("Kafka payload parsing failed");
+    }
+
+    private void logInvalidPayload(
+            String topic,
+            String payload,
+            Class<? extends Exception> exceptionClass,
+            String exceptionMessage
+    ) {
+        log.atError()
+                .addKeyValue("topic", topic)
+                .addKeyValue("eventId", MDC.get("eventId"))
+                .addKeyValue("exceptionClass", exceptionClass.getName())
+                .addKeyValue("exceptionMessage", exceptionMessage)
                 .addKeyValue("payloadLength", payload == null ? 0 : payload.length())
                 .log("Kafka payload parsing failed");
     }
