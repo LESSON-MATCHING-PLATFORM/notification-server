@@ -6,6 +6,7 @@ import com.kosa.noticeserver.domain.service.PaymentEventNotificationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -30,9 +31,27 @@ class PaymentTopicConsumerTest {
     }
 
     @Test
+    @DisplayName("null payment payload는 알림 처리 없이 소비한다")
+    void consumePaymentEvent_whenPayloadIsNull_doesNotRetry() {
+        assertThatCode(() -> consumer.consumePaymentEvent(null, "event-001"))
+                .doesNotThrowAnyException();
+
+        verify(notificationService, never()).notice(any(PaymentEvent.class), any());
+    }
+
+    @Test
     @DisplayName("잘못된 bulk JSON payload는 알림 처리 없이 소비한다")
     void consumePaymentBulkEvent_whenPayloadIsInvalid_doesNotRetry() {
         consumer.consumePaymentBulkEvent("{invalid", "event-001");
+
+        verify(notificationService, never()).notice(anyList(), any());
+    }
+
+    @Test
+    @DisplayName("null payment bulk payload는 알림 처리 없이 소비한다")
+    void consumePaymentBulkEvent_whenPayloadIsNull_doesNotRetry() {
+        assertThatCode(() -> consumer.consumePaymentBulkEvent(null, "event-001"))
+                .doesNotThrowAnyException();
 
         verify(notificationService, never()).notice(anyList(), any());
     }
