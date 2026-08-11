@@ -7,7 +7,7 @@
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${PID:- }] [${springAppName:- }] [%thread] %highlight(%-5level) [%X{traceId}] %cyan(%logger{36}) : %msg %kvp%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${PID:- }] [${springAppName:- }] [%thread] %highlight(%-5level) [%X{requestId}] [%X{eventId}] %cyan(%logger{36}) : %msg %kvp%n</pattern>
         </encoder>
     </appender>
 
@@ -15,7 +15,7 @@
         <file>${LOG_DIR}/${LOG_FILE_NAME}.log</file>
 
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${PID:- }] [${springAppName:- }] [%thread] %highlight(%-5level) [%X{traceId}] %cyan(%logger{36}) : %msg %kvp%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [${PID:- }] [${springAppName:- }] [%thread] %highlight(%-5level) [%X{requestId}] [%X{eventId}] %cyan(%logger{36}) : %msg %kvp%n</pattern>
         </encoder>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -30,4 +30,3 @@
     </root>
 
 </configuration>
-
