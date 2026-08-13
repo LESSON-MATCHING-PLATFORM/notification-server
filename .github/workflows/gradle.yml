@@ -7,6 +7,8 @@ on:
 env:
   GCP_PROJECT_ID: "lessonplatform-495307"
   GCP_REGION: "asia-northeast3"
+  GCP_ZONE: "asia-northeast3-a"
+  GCP_INSTANCE_NAME: "notification-service"
   ARTIFACT_REGISTRY_REPO: "notification-server-repo" # GCP에 만들 이미지 저장소 이름
   IMAGE_NAME: "spring-app"
 
@@ -49,8 +51,7 @@ jobs:
         docker build -t asia-northeast3-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY_REPO/$IMAGE_NAME:latest .
         docker push asia-northeast3-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY_REPO/$IMAGE_NAME:latest
     
-    # 5. CP VM의 컨테이너 이미지 업데이트 및 재시작 명령
+    # 5. GCP VM의 컨테이너 이미지 업데이트 및 재시작 명령
     - name: Deploy to GCP Compute Engine
       run: |
-        gcloud compute instances reset spring --zone=asia-northeast3-a
-
+        gcloud compute instances reset "$GCP_INSTANCE_NAME" --zone="$GCP_ZONE"
