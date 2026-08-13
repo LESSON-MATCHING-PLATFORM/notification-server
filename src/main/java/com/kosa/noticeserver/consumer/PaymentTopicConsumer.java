@@ -2,8 +2,10 @@ package com.kosa.noticeserver.consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kosa.noticeserver.domain.model.EventType;
 import com.kosa.noticeserver.domain.model.event.PaymentBulkEvent;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
+import com.kosa.noticeserver.domain.service.MetadataService;
 import com.kosa.noticeserver.domain.service.PaymentEventNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +21,7 @@ public class PaymentTopicConsumer {
 
     private final ObjectMapper objectMapper;
     private final PaymentEventNotificationService paymentEventNotificationService;
+    private final MetadataService metadataService;
 
     @KafkaListener(topics = "payment-topic", groupId = "notification-group")
     public void consumePaymentEvent(
@@ -28,6 +31,7 @@ public class PaymentTopicConsumer {
         log.info("Payment Event Received");
 
         MDC.put("eventId", eventId);
+        metadataService.recordConsumedEvent(EventType.PAYMENT, eventId, payload);
 
         try {
             if (payload == null) {
@@ -60,6 +64,7 @@ public class PaymentTopicConsumer {
         log.info("Payment Bulk Event Received");
 
         MDC.put("eventId", eventId);
+        metadataService.recordConsumedEvent(EventType.PAYMENT_BULK, eventId, payload);
 
         try {
             if (payload == null) {

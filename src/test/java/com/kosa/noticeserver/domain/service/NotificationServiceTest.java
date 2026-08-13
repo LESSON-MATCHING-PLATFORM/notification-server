@@ -116,5 +116,41 @@ class NotificationServiceTest {
         assertNotNull(token.getUpdatedAt());
     }
 
+    @Test
+    public void 토큰을_저장하면_결제_알림_기본_설정을_생성한다() {
+        // when
+        notificationService.saveToken(new TokenEntity("fcm-token-002", "user-003"));
+        em.flush();
+        em.clear();
+
+        // then
+        NotificationSettingEntity setting = notificationSettingRepository
+                .findByUserIdAndType("user-003", NotificationType.PAYMENT)
+                .orElseThrow(RuntimeException::new);
+
+        assertTrue(setting.isEnabled());
+    }
+
+    @Test
+    public void 기존_알림_설정이_있으면_토큰_저장시_설정을_덮어쓰지_않는다() {
+        // given
+        notificationService.updateNotificationSetting(
+                new NotificationSettingEntity("user-004", NotificationType.PAYMENT, false)
+        );
+        em.flush();
+        em.clear();
+
+        // when
+        notificationService.saveToken(new TokenEntity("fcm-token-003", "user-004"));
+        em.flush();
+        em.clear();
+
+        // then
+        NotificationSettingEntity setting = notificationSettingRepository
+                .findByUserIdAndType("user-004", NotificationType.PAYMENT)
+                .orElseThrow(RuntimeException::new);
+
+        assertFalse(setting.isEnabled());
+    }
 
 }

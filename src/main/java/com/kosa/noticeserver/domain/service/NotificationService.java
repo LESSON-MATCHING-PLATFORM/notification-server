@@ -26,6 +26,14 @@ public class NotificationService {
     public void saveToken(TokenEntity tokenEntity) {
         log.info("FCM token registration requested. userId={}", tokenEntity.getUserId());
         tokenRepository.upsertByToken(tokenEntity.getToken(), tokenEntity.getUserId());
+        createDefaultPaymentSettingIfAbsent(tokenEntity.getUserId());
+    }
+
+    private void createDefaultPaymentSettingIfAbsent(String userId) {
+        notificationSettingRepository.findByUserIdAndType(userId, NotificationType.PAYMENT)
+                .orElseGet(() -> notificationSettingRepository.save(
+                        new NotificationSettingEntity(userId, NotificationType.PAYMENT, true)
+                ));
     }
 
     @Transactional

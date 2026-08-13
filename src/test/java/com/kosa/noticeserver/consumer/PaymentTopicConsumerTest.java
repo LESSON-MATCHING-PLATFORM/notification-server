@@ -1,7 +1,9 @@
 package com.kosa.noticeserver.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kosa.noticeserver.domain.model.EventType;
 import com.kosa.noticeserver.domain.model.event.PaymentEvent;
+import com.kosa.noticeserver.domain.service.MetadataService;
 import com.kosa.noticeserver.domain.service.PaymentEventNotificationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,13 +22,15 @@ class PaymentTopicConsumerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final PaymentEventNotificationService notificationService = mock(PaymentEventNotificationService.class);
-    private final PaymentTopicConsumer consumer = new PaymentTopicConsumer(objectMapper, notificationService);
+    private final MetadataService metadataService = mock(MetadataService.class);
+    private final PaymentTopicConsumer consumer = new PaymentTopicConsumer(objectMapper, notificationService, metadataService);
 
     @Test
     @DisplayName("잘못된 JSON payload는 알림 처리 없이 소비한다")
     void consumePaymentEvent_whenPayloadIsInvalid_doesNotRetry() {
         consumer.consumePaymentEvent("{invalid", "event-001");
 
+        verify(metadataService).recordConsumedEvent(EventType.PAYMENT, "event-001", "{invalid");
         verify(notificationService, never()).notice(any(PaymentEvent.class), any());
     }
 
@@ -36,6 +40,7 @@ class PaymentTopicConsumerTest {
         assertThatCode(() -> consumer.consumePaymentEvent(null, "event-001"))
                 .doesNotThrowAnyException();
 
+        verify(metadataService).recordConsumedEvent(EventType.PAYMENT, "event-001", null);
         verify(notificationService, never()).notice(any(PaymentEvent.class), any());
     }
 
@@ -44,6 +49,7 @@ class PaymentTopicConsumerTest {
     void consumePaymentBulkEvent_whenPayloadIsInvalid_doesNotRetry() {
         consumer.consumePaymentBulkEvent("{invalid", "event-001");
 
+        verify(metadataService).recordConsumedEvent(EventType.PAYMENT_BULK, "event-001", "{invalid");
         verify(notificationService, never()).notice(anyList(), any());
     }
 
@@ -53,6 +59,7 @@ class PaymentTopicConsumerTest {
         assertThatCode(() -> consumer.consumePaymentBulkEvent(null, "event-001"))
                 .doesNotThrowAnyException();
 
+        verify(metadataService).recordConsumedEvent(EventType.PAYMENT_BULK, "event-001", null);
         verify(notificationService, never()).notice(anyList(), any());
     }
 
@@ -65,6 +72,8 @@ class PaymentTopicConsumerTest {
 
         assertThatThrownBy(() -> consumer.consumePaymentEvent(paymentPayload(), "event-001"))
                 .isInstanceOf(IllegalStateException.class);
+
+        verify(metadataService).recordConsumedEvent(EventType.PAYMENT, "event-001", paymentPayload());
     }
 
     private String paymentPayload() {
