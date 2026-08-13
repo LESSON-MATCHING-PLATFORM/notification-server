@@ -2,7 +2,9 @@ package com.kosa.noticeserver.domain.service;
 
 import com.kosa.noticeserver.domain.model.NotificationSettingEntity;
 import com.kosa.noticeserver.domain.model.NotificationType;
+import com.kosa.noticeserver.domain.model.TokenEntity;
 import com.kosa.noticeserver.infrastructure.repository.NotificationSettingRepository;
+import com.kosa.noticeserver.infrastructure.repository.TokenRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +17,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.kafka.listener.auto-startup=false"
+})
 @Testcontainers
 @Transactional
 class NotificationServiceTest {
 
     @Autowired
     private NotificationSettingRepository notificationSettingRepository;
+    @Autowired
+    private TokenRepository tokenRepository;
     @Autowired
     private NotificationService notificationService;
     @Autowired
@@ -86,6 +92,28 @@ class NotificationServiceTest {
         assertNotNull(setting);
         assertEquals(NotificationType.PAYMENT, setting.getType());
         assertFalse(setting.isEnabled());
+    }
+
+    @Test
+    public void 동일한_FCM_토큰이_다시_저장되면_현재_사용자로_갱신한다() {
+        // given
+        notificationService.saveToken(new TokenEntity("fcm-token-001", "user-001"));
+        em.flush();
+        em.clear();
+
+        // when
+        notificationService.saveToken(new TokenEntity("fcm-token-001", "user-002"));
+        em.flush();
+        em.clear();
+
+        // then
+        TokenEntity token = tokenRepository.findByToken("fcm-token-001")
+                .orElseThrow(RuntimeException::new);
+
+        assertEquals(1, tokenRepository.count());
+        assertEquals("user-002", token.getUserId());
+        assertNotNull(token.getCreatedAt());
+        assertNotNull(token.getUpdatedAt());
     }
 
 

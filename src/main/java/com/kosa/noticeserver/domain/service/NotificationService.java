@@ -6,6 +6,7 @@ import com.kosa.noticeserver.domain.model.TokenEntity;
 import com.kosa.noticeserver.infrastructure.repository.NotificationSettingRepository;
 import com.kosa.noticeserver.infrastructure.repository.TokenRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,14 +16,16 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NotificationService {
 
     private final TokenRepository tokenRepository;
     private final NotificationSettingRepository notificationSettingRepository;
 
+    @Transactional
     public void saveToken(TokenEntity tokenEntity) {
-        System.out.printf(tokenEntity.toString());
-        tokenRepository.save(tokenEntity);
+        log.info("FCM token registration requested. userId={}", tokenEntity.getUserId());
+        tokenRepository.upsertByToken(tokenEntity.getToken(), tokenEntity.getUserId());
     }
 
     @Transactional
