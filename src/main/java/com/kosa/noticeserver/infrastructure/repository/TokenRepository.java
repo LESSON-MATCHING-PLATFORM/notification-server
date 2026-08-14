@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -20,6 +21,7 @@ public interface TokenRepository extends JpaRepository<TokenEntity, Long> {
 
     List<TokenEntity> findAllByUserIdIn(List<String> userIds);
 
+    @Transactional
     long deleteByTokenIn(Collection<String> tokens);
 
     @Modifying

@@ -10,10 +10,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -151,6 +154,25 @@ class NotificationServiceTest {
                 .orElseThrow(RuntimeException::new);
 
         assertFalse(setting.isEnabled());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void 외부_트랜잭션이_없어도_토큰_목록을_삭제한다() {
+        // given
+        tokenRepository.saveAll(List.of(
+                new TokenEntity("invalid-token-001", "user-005"),
+                new TokenEntity("valid-token-001", "user-005")
+        ));
+
+        try {
+            // when, then
+            assertDoesNotThrow(() -> tokenRepository.deleteByTokenIn(List.of("invalid-token-001")));
+            assertTrue(tokenRepository.findByToken("invalid-token-001").isEmpty());
+            assertTrue(tokenRepository.findByToken("valid-token-001").isPresent());
+        } finally {
+            tokenRepository.deleteByTokenIn(List.of("invalid-token-001", "valid-token-001"));
+        }
     }
 
 }
