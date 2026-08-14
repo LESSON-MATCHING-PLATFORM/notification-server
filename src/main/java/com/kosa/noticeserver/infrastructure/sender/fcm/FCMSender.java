@@ -2,6 +2,7 @@ package com.kosa.noticeserver.infrastructure.sender.fcm;
 
 import com.google.firebase.messaging.*;
 import com.kosa.noticeserver.domain.model.*;
+import com.kosa.noticeserver.config.FirebaseProperties;
 import com.kosa.noticeserver.infrastructure.sender.NotificationSender;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,21 +16,23 @@ import java.util.List;
 public class FCMSender implements NotificationSender {
 
     private final FirebaseMessaging firebaseMessaging;
+    private final FirebaseProperties firebaseProperties;
 
     @Autowired
-    public FCMSender(FirebaseMessaging firebaseMessaging) {
+    public FCMSender(FirebaseMessaging firebaseMessaging, FirebaseProperties firebaseProperties) {
         this.firebaseMessaging = firebaseMessaging;
+        this.firebaseProperties = firebaseProperties;
     }
 
     @Override
     public void send(SendNotificationCommand command) throws Throwable {
-        firebaseMessaging.send(buildMessage(command), true);
+        firebaseMessaging.send(buildMessage(command), firebaseProperties.isDryRun());
     }
 
     public SendBatchResult send(List<SendNotificationCommand> commands) throws Throwable {
         BatchResponse batchResponse = firebaseMessaging.sendEach(
                 commands.stream().map(this::buildMessage).toList(),
-                true
+                firebaseProperties.isDryRun()
         );
 
         List<SendDetails> results = new ArrayList<>();

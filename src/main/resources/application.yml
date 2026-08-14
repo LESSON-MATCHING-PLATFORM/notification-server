@@ -55,3 +55,4 @@ management:
 
 firebase:
   project-id: ${FIREBASE_PROJECT_ID:}
+  dry-run: ${FIREBASE_DRY_RUN:false}
