@@ -52,3 +52,6 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID:}
